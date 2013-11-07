@@ -60,11 +60,12 @@ function eshopbox_picklist_page() {
     $my_query=get_posts($args);
     $finalarray[]=array("Product name","color","size","quantity");
     foreach($my_query as $key=>$val){
+        $tracking_number = '';
       $abc = new WC_Order($val->ID);
-    //  echo '<pre>';
-     // print_r($abc);
+      //echo '<pre>';
+      //print_r($abc);
       if($abc->status=='on-hold'){
-
+  
        foreach($abc->get_items() as $key=>$item){
           $sku = $wpdb->get_var( $wpdb->prepare( "SELECT meta_value  FROM $wpdb->postmeta WHERE meta_key='_sku' AND post_id='%d' LIMIT 1", $item['product_id'] ) ); 
            global $post;
@@ -299,12 +300,45 @@ jQuery.post(ajaxurl, data, function(response) {
 
 "); 
 } else {
+   // echo '<pre>';
+   // print_r($_POST);
+    if(isset($_POST['printinvoice'])){
+           // $wp_list_table = _get_list_table('WP_Posts_List_Table');
+    $action = "print_invoice";
+    if ($action=='print_invoice' || $action=='print_packing') {
+      $posts = '';
+
+      $posts = $_POST['backhistory'];
+
+      $forward = wp_nonce_url(admin_url(), 'print-pip');
+      $forward = add_query_arg(array('print_pip' => 'true', 'post' => $posts, 'type' => $action), $forward);
+      wp_redirect($forward);
+      exit();
+        
+    }   
+    }
     
+    if(isset($_POST['printpacking'])){
+        echo $action = "print_packing";
+    if ($action=='print_invoice' || $action=='print_packing') {
+      $posts = '';
+
+      $posts = $_POST['backhistory'];
+
+      $forward = wp_nonce_url(admin_url(), 'print-pip');
+      $forward = add_query_arg(array('print_pip' => 'true', 'post' => $posts, 'type' => $action), $forward);
+      wp_redirect($forward);
+      exit();  
+        
+    }
+   
+    }
     ?>
 <form name="manifestform" id="manifestform" style="margin:4px 15px 0 0;" method="post" action="" target="">                               
     <div id="manifesttable">
-    <input type="submit" id="submit" class="button" name="submit" style="margin-bottom: 10px; margin-right:20px" value="Fetch" />
-   
+    <input type="submit" id="printinvoice" class="button" name="printinvoice" style="margin-top: 10px; margin-right:20px" value="Print Invoice" />
+<input type="submit" id="printpacking" class="button" name="printpacking" style="margin-top: 10px; margin-right:20px" value="Print Packing Slip" />
+
         <table width="100%" cellspacing="0" cellpadding="0" class="widefat">
             <thead>
                 <tr>
@@ -357,13 +391,39 @@ jQuery.post(ajaxurl, data, function(response) {
     $orderid = substr($orderid, 0,-1);
   //  echo $orderid;
     $my_query = explode(',',$orderid);
+    $my_query = array_unique($my_query);
+    $backHistory = implode(',',$my_query);
         foreach($my_query as $key=>$val){
-      $abc = new WC_Order($val);
-     // echo '<pre>';
-    //  print_r($abc);
+      $tracking_number='';
+            $abc = new WC_Order($val);
+   //  echo '<pre>';
+   //   print_r($abc);
       if($abc->status=='on-hold'){
+$tracking_number = $abc->order_custom_fields['_tracking_number'][0];
+if($tracking_number ==''){
+    // logic to insert the tracking provider and tracking number
+    $trackProvider = 'blue-dart';
+    if($abc->payment_method=='cod'){
+             $myrows = $wpdb->get_row( "SELECT * FROM ".$wpdb->prefix ."bluedart_codawb where assigned='0'" );
+              $abwN =  trim($myrows->CAWBNO);
+              $wpdb->get_row( "update ".$wpdb->prefix."bluedart_codawb set `assigned`='1',`orderid`='".$abc->id."' where `CAWBNO`='".trim($abwN)."'") ;
+      } else {
+        $myrows = $wpdb->get_row( "SELECT * FROM ".$wpdb->prefix ."bluedart_prepaidawb where assigned='0'" );
+        $abwN = trim($myrows->CAWBNO);
+        $wpdb->get_row("update " .$wpdb->prefix . "bluedart_prepaidawb set `assigned`='1',`orderid`='".$abc->id."' where `CAWBNO`='".trim($abwN)."'") ;
+          
+      }
+      update_post_meta( $abc->id , '_tracking_provider', $trackProvider );
+      update_post_meta( $abc->id , '_tracking_number', $abwN );
+       update_post_meta( $abc->id , '_date_shipped', time());
+      
+ 
+} else {
+   $trackProvider = $abc->order_custom_fields['_tracking_provider'][0]; 
+   $abwN = $abc->order_custom_fields['_tracking_number'][0]; 
+}
 
-       foreach($abc->get_items() as $key=>$item){
+foreach($abc->get_items() as $key=>$item){
           $sku = $wpdb->get_var( $wpdb->prepare( "SELECT meta_value  FROM $wpdb->postmeta WHERE meta_key='_sku' AND post_id='%d' LIMIT 1", $item['product_id'] ) ); 
            global $post;
 $terms = get_the_terms( $item['product_id'], 'product_cat' );
@@ -377,12 +437,12 @@ foreach ($terms as $term) {
              <td style="padding:7px 7px 8px; "><?php echo $val;  ?></td>
              <td style=" padding:7px 7px 8px; "><?php echo $sku;  ?></td>
              <td style="padding:7px 7px 8px; "><?php echo $abc->order_date;  ?></td>
-             <td style="padding:7px 7px 8px; "><?php echo $item['name'];  ?></td>
+             <td style="padding:7px 7px 8px; "><?php echo $abwN;  ?></td>
              <td style="padding:7px 7px 8px; "><?php echo $item['name'];  ?></td>
              <td style="padding:7px 7px 8px; "><?php echo $product_cat_name;  ?></td>
              <td style="padding:7px 7px 8px; "><?php echo $abc->shipping_city;  ?></td>
              <td style="padding:7px 7px 8px; "><?php echo $abc->billing_phone;  ?></td>
-             <td style="padding:7px 7px 8px; ">xxxxxxxxxx</td>
+             <td style="padding:7px 7px 8px; "><?php echo $trackProvider;  ?></td>
              <td style="padding:7px 7px 8px; "><?php echo $abc->payment_method_title;  ?></td>
 
              </tr>
@@ -395,12 +455,134 @@ foreach ($terms as $term) {
     </table>
 </div>
 <input type="hidden" id="processorder" name="processorder" value="yes" />
-<input type="submit" id="submit" class="button" name="submit" style="margin-top: 10px; margin-right:20px" value="Fetch" />
-
+<input type="hidden" id="checkhistory" name="check" value="<?php echo $_POST['check'];  ?>" />
+<input type="hidden" id="backhistory" value="<?php echo $backHistory;  ?>" name="backhistory" />
+<input type="submit" id="printinvoice" class="button" name="printinvoice" style="margin-top: 10px; margin-right:20px" value="Print Invoice" />
+<input type="submit" id="printpacking" class="button" name="printpacking" style="margin-top: 10px; margin-right:20px" value="Print Packing Slip" />
 
 </form>
 
 <?php
+
+ $woocommerce->add_inline_js("
+    jQuery(document).ready(function(){
+    
+    jQuery('.markasship').on('click',function(event){
+   // event.preventDefault();
+   var checkcheck = 0;
+        $(':checkbox').each(function() {
+           if(this.checked == true){
+               // alert('checked');
+                checkcheck = 1;
+            }
+        });   
+      if(checkcheck==1){
+    jQuery('#manifestform').attr('action','');
+    jQuery('#manifestform').attr('target','');
+    
+
+     $('#manifestform').submit();
+} else {
+alert('Please select a shipment');
+return false;
+}
+});
+
+jQuery('.rem').live('click',function(event){
+    event.preventDefault();
+
+    jQuery('#'+jQuery(this).attr('rel')+'tr').remove();
+
+});
+    
+    
+$('.select-all').on('click',function(event) {   
+    if(this.checked) {
+        // Iterate each checkbox
+        $(':checkbox').each(function() {
+            this.checked = true;                        
+        });
+    }
+});
+
+          jQuery('#ordert').keyup(function(event){
+          var tex = jQuery(this).val();
+          var checkfl = 0;
+              if(event.keyCode==13){
+            //  alert(jQuery('#onlyshipments').val());
+              orderString = jQuery('#onlyorders').val(); 
+             // alert(orderString);
+                var arrayOrders = orderString.split(',');
+             //   alert(arrayOrders[0]);
+              jQuery.each(arrayOrders,function(i,v){
+              if(arrayOrders[i]==tex){
+              checkfl = 1;
+              }
+               
+                });
+                
+var arrayShipments = jQuery('#onlyshipments').val().split(',');
+              jQuery.each(arrayShipments,function(i,v){
+              if(arrayShipments[i]==tex){
+              checkfl = 1;
+              }
+               
+                });
+                
+if(checkfl==0){
+alert('Invalid order/shipment id');
+return false;
+}
+                
+                  var textBoxText = jQuery(this).val();
+                  jQuery(this).val('');
+                  var orderData = {
+                  action: 'my_orderaction',
+                  orderId : textBoxText
+               };
+
+               jQuery.post(ajaxurl,orderData,function(response){
+                      jQuery('#manifdetail').after(response);
+               });
+
+              }
+          });
+    });  
+
+    jQuery('#selectprovider').bind('change',function(){
+   var payType = jQuery('#paytype').val()
+    jQuery('#shipprovider').val(jQuery(this).val());
+    jQuery('#paymethod').val(payType);
+
+      jQuery('#loadimg').show();
+          var data = {
+          action: 'my_actions',
+          whatever: 1234,
+          valselected : jQuery(this).val(),
+          paytype : payType
+  };
+
+jQuery.post(ajaxurl, data, function(response) {
+
+         splitResponse = response.split('$');
+         if(splitResponse[0]==0){
+             alert('No pending shipments');
+             jQuery('#noshipments').html('0');
+             jQuery('#noorders').html('Nil');
+             jQuery('#ordert').val('');
+
+         } else {
+         jQuery('#noshipments').html(splitResponse[0]);
+         jQuery('#noorders').html(splitResponse[1]);
+         jQuery('#onlyorders').val(splitResponse[2]);
+         jQuery('#onlyshipments').val(splitResponse[3]);
+         
+         jQuery('#ordert').val('');
+     }
+  });
+});
+
+"); 
 }
 }     
 
